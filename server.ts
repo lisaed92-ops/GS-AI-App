@@ -241,21 +241,52 @@ const WEB_SEARCH_TOOL_ANTHROPIC = {
   },
 };
 
-/** Execute a web search via DuckDuckGo and return formatted results */
+/** Execute a web search via DuckDuckGo HTML and return formatted results */
 async function executeWebSearch(query: string): Promise<string> {
+  // Try duck-duck-scrape first, fall back to DuckDuckGo HTML lite
   try {
     const results = await ddgSearch(query, { safeSearch: SafeSearchType.MODERATE });
-    if (!results.results || results.results.length === 0) {
-      return `No search results found for "${query}".`;
+    if (results.results && results.results.length > 0) {
+      const top = results.results.slice(0, 5);
+      const formatted = top.map((r, i) =>
+        `${i + 1}. **${r.title}**\n   ${r.url}\n   ${r.description || "No description"}`
+      ).join("\n\n");
+      return `Web search results for "${query}":\n\n${formatted}`;
     }
-    // Return top 5 results formatted
-    const top = results.results.slice(0, 5);
-    const formatted = top.map((r, i) =>
-      `${i + 1}. **${r.title}**\n   ${r.url}\n   ${r.description || "No description"}`
-    ).join("\n\n");
-    return `Web search results for "${query}":\n\n${formatted}`;
   } catch (err: any) {
-    console.warn("Web search failed:", err?.message);
+    console.warn("DDG scrape failed, trying HTML fallback:", err?.message);
+  }
+
+  // Fallback: DuckDuckGo HTML lite
+  try {
+    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const resp = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
+    const html = await resp.text();
+    // Parse result snippets from the HTML
+    const results: { title: string; url: string; snippet: string }[] = [];
+    const regex = /<a[^>]+class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+    let match;
+    while ((match = regex.exec(html)) !== null && results.length < 5) {
+      const rawUrl = match[1];
+      const title = match[2].replace(/<[^>]+>/g, "").trim();
+      const snippet = match[3].replace(/<[^>]+>/g, "").trim();
+      // DDG wraps URLs in a redirect; extract the actual URL
+      const actualUrl = rawUrl.includes("uddg=") ? decodeURIComponent(rawUrl.split("uddg=")[1]?.split("&")[0] || rawUrl) : rawUrl;
+      if (title) results.push({ title, url: actualUrl, snippet });
+    }
+    if (results.length > 0) {
+      const formatted = results.map((r, i) =>
+        `${i + 1}. **${r.title}**\n   ${r.url}\n   ${r.snippet || "No description"}`
+      ).join("\n\n");
+      return `Web search results for "${query}":\n\n${formatted}`;
+    }
+    return `No search results found for "${query}".`;
+  } catch (err: any) {
+    console.warn("HTML fallback also failed:", err?.message);
     return `Web search failed: ${err?.message || "Unknown error"}`;
   }
 }
@@ -286,6 +317,9 @@ app.post("/api/chat", async (req, res) => {
 
   // Resolve knowledge content and append to system prompt
   let finalSystemPrompt = systemPrompt || "You are a helpful AI assistant.";
+
+  // Inject current date so the LLM knows the actual date for web searches
+  finalSystemPrompt += `\n\nToday's date is ${new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}. When you use web search results, always prioritise and cite information from the search results over your training data. Present the search results as current information.`;
 
   // Append skill instructions if a specific skill is selected
   if (skillInstructions) {

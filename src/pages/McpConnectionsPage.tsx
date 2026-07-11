@@ -3,44 +3,14 @@ import { Search, ExternalLink, CheckCircle, Circle, Server } from "lucide-react"
 import { getMcpConnections, saveMcpConnection } from "../lib/storage";
 import type { McpConnection } from "../types/agent";
 
-// Seed demo MCP connections on first load if they don't exist
-function ensureMcpSeeded() {
-  const existing = getMcpConnections();
-  const seeds: McpConnection[] = [
-    {
-      id: "accuweather",
-      name: "AccuWeather",
-      description: "Real-time weather data via AccuWeather API — provides current conditions for any city worldwide.",
-      serverUrl: "http://dataservice.accuweather.com",
-      status: "approved",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "duckduckgo-search",
-      name: "Web Search (DuckDuckGo)",
-      description: "Free web search powered by DuckDuckGo — lets agents search the internet for current information, news, and facts.",
-      serverUrl: "https://duckduckgo.com",
-      status: "approved",
-      createdAt: new Date().toISOString(),
-    },
-
-  ];
-  for (const seed of seeds) {
-    if (!existing.find((c) => c.id === seed.id)) {
-      saveMcpConnection(seed);
-    }
-  }
-}
-
 type McpServerView = McpConnection & { connected: boolean };
 
 export default function McpConnectionsPage() {
   const [servers, setServers] = useState<McpServerView[]>([]);
   const [search, setSearch] = useState("");
 
-  // Load from storage on mount, seeding AccuWeather first
+  // Load from storage on mount
   useEffect(() => {
-    ensureMcpSeeded();
     const conns = getMcpConnections();
     setServers(conns.map((c) => ({ ...c, connected: c.status === "approved" })));
   }, []);

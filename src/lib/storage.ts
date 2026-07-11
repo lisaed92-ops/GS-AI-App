@@ -114,6 +114,42 @@ export function deleteSkill(id: string): void {
 
 const MCP_KEY = "factori_mcp";
 
+// One-time cleanup & seeding on app load
+const RETIRED_MCP_IDS = ["atlassian-jira", "microsoft-outlook", "slack"];
+const MCP_SEEDS: McpConnection[] = [
+  {
+    id: "accuweather",
+    name: "AccuWeather",
+    description: "Real-time weather data via AccuWeather API — provides current conditions for any city worldwide.",
+    serverUrl: "http://dataservice.accuweather.com",
+    status: "approved",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "duckduckgo-search",
+    name: "Web Search (DuckDuckGo)",
+    description: "Free web search powered by DuckDuckGo — lets agents search the internet for current information, news, and facts.",
+    serverUrl: "https://duckduckgo.com",
+    status: "approved",
+    createdAt: new Date().toISOString(),
+  },
+];
+(function initMcp() {
+  // Remove retired connections
+  let conns: McpConnection[] = [];
+  try {
+    conns = JSON.parse(localStorage.getItem(MCP_KEY) || "[]");
+    conns = conns.filter((c) => !RETIRED_MCP_IDS.includes(c.id));
+  } catch { conns = []; }
+  // Seed missing connections
+  for (const seed of MCP_SEEDS) {
+    if (!conns.find((c) => c.id === seed.id)) {
+      conns.push(seed);
+    }
+  }
+  localStorage.setItem(MCP_KEY, JSON.stringify(conns));
+})();
+
 export function getMcpConnections(): McpConnection[] {
   return getItem<McpConnection>(MCP_KEY, []);
 }

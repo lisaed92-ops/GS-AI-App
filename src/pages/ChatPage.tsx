@@ -36,7 +36,11 @@ export default function ChatPage() {
   const agents = allAgents.map((a) => ({ id: a.id, name: a.name }));
   const skills = getSkills().map((s) => ({ id: s.id, name: s.name }));
 
-  const [selectedAgent, setSelectedAgent] = useState(() => agents.length > 0 ? agents[0].id : "");
+  const [selectedAgent, setSelectedAgent] = useState(() => {
+    const agentParam = searchParams.get("agent");
+    if (agentParam && allAgents.find((a) => a.id === agentParam)) return agentParam;
+    return agents.length > 0 ? agents[0].id : "";
+  });
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [selectedSkill, setSelectedSkill] = useState("__all__");
   const [attachments, setAttachments] = useState<Attachment[]>([]);

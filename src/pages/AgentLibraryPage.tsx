@@ -131,14 +131,15 @@ export default function AgentLibraryPage() {
           {filtered.map((a) => (
             <div
               key={a.id}
-              className="rounded-xl border border-white/10 bg-[#1a1a1a] p-5 transition-colors hover:border-white/20"
+              onClick={() => navigate(`/?agent=${a.id}`)}
+              className="cursor-pointer rounded-xl border border-white/10 bg-[#1a1a1a] p-5 transition-colors hover:border-white/20"
             >
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="font-medium text-white">{a.name}</h3>
                   <p className="mt-1 text-xs text-gray-500">{modelLabel(a.model)}</p>
                 </div>
-                <button onClick={() => toggleFav(a.id)} className="text-gray-500 hover:text-yellow-400">
+                <button onClick={(e) => { e.stopPropagation(); toggleFav(a.id); }} className="text-gray-500 hover:text-yellow-400">
                   <Star size={16} fill={a.favourite ? "currentColor" : "none"} className={a.favourite ? "text-yellow-400" : ""} />
                 </button>
               </div>
@@ -153,7 +154,7 @@ export default function AgentLibraryPage() {
                   {a.visibility}
                 </span>
                 <button
-                  onClick={() => navigate(`/create-agent/${a.id}`)}
+                  onClick={(e) => { e.stopPropagation(); navigate(`/create-agent/${a.id}`); }}
                   className="flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-xs text-gray-400 transition-colors hover:border-white/20 hover:text-gray-200"
                 >
                   <Pencil size={12} /> Edit
