@@ -16,29 +16,14 @@ function ensureMcpSeeded() {
       createdAt: new Date().toISOString(),
     },
     {
-      id: "atlassian-jira",
-      name: "Atlassian (Jira & Confluence)",
-      description: "Access Jira issues, boards, and Confluence pages — search, create, and update tickets and documentation.",
-      serverUrl: "https://api.atlassian.com",
+      id: "duckduckgo-search",
+      name: "Web Search (DuckDuckGo)",
+      description: "Free web search powered by DuckDuckGo — lets agents search the internet for current information, news, and facts.",
+      serverUrl: "https://duckduckgo.com",
       status: "approved",
       createdAt: new Date().toISOString(),
     },
-    {
-      id: "microsoft-outlook",
-      name: "Microsoft Outlook",
-      description: "Read and send emails, manage calendar events, and search contacts via Microsoft Graph API.",
-      serverUrl: "https://graph.microsoft.com",
-      status: "approved",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "slack",
-      name: "Slack",
-      description: "Send messages, search channels, read threads, and manage notifications in Slack workspaces.",
-      serverUrl: "https://slack.com/api",
-      status: "approved",
-      createdAt: new Date().toISOString(),
-    },
+
   ];
   for (const seed of seeds) {
     if (!existing.find((c) => c.id === seed.id)) {
@@ -78,7 +63,7 @@ export default function McpConnectionsPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-white">MCP Connections</h1>
+      <h1 className="text-2xl font-bold text-white">MCP Connections & Tools</h1>
       <p className="mt-1 text-sm text-gray-500">
         Admin-approved Model Context Protocol servers available for your agents.
       </p>

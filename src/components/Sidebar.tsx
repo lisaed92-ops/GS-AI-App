@@ -12,7 +12,6 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { getAgents, getSkills, getMcpConnections, getChatHistories, deleteChatHistory } from "../lib/storage";
-import DevModeToggle from "./DevModeToggle";
 import gsIcon from "../../Images/GS_24.png";
 
 const topNav = [
@@ -169,10 +168,6 @@ export default function Sidebar() {
       <div className="px-4 py-5">
         <img src={gsIcon} alt="Global Streaming" className="h-[36px]" />
         <p className="mt-1 text-xs text-gray-500">AI Agent Platform</p>
-        {/* Developer / Non-Developer toggle */}
-        <div className="mt-3">
-          <DevModeToggle />
-        </div>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto px-3">
         {navItemWithDropdown(
@@ -225,7 +220,7 @@ export default function Sidebar() {
 
         {sectionLabel("Connections")}
         {navItemWithDropdown(
-          { name: "MCP Connections", href: "/connections", icon: Server },
+          { name: "MCP Connections & Tools", href: "/connections", icon: Server },
           mcpOpen,
           () => setMcpOpen((o) => !o),
           mcpConns.map((c) => ({ ...c, href: `/connections` })),

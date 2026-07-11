@@ -7,6 +7,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import mammoth from "mammoth";
+import { search as ddgSearch, SafeSearchType } from "duck-duck-scrape";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const pdfParse = require("pdf-parse");
@@ -205,6 +206,60 @@ const WEATHER_TOOL_ANTHROPIC = {
   },
 };
 
+// ── Web Search tool definitions ──
+
+const WEB_SEARCH_TOOL_OPENAI: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "web_search",
+    description: "Search the web for current information. Use this when the user asks about recent events, facts you're unsure about, or anything that would benefit from up-to-date web results.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "The search query, e.g. 'latest Node.js version', 'Premier League scores today'",
+        },
+      },
+      required: ["query"],
+    },
+  },
+};
+
+const WEB_SEARCH_TOOL_ANTHROPIC = {
+  name: "web_search",
+  description: "Search the web for current information. Use this when the user asks about recent events, facts you're unsure about, or anything that would benefit from up-to-date web results.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      query: {
+        type: "string",
+        description: "The search query, e.g. 'latest Node.js version', 'Premier League scores today'",
+      },
+    },
+    required: ["query"],
+  },
+};
+
+/** Execute a web search via DuckDuckGo and return formatted results */
+async function executeWebSearch(query: string): Promise<string> {
+  try {
+    const results = await ddgSearch(query, { safeSearch: SafeSearchType.MODERATE });
+    if (!results.results || results.results.length === 0) {
+      return `No search results found for "${query}".`;
+    }
+    // Return top 5 results formatted
+    const top = results.results.slice(0, 5);
+    const formatted = top.map((r, i) =>
+      `${i + 1}. **${r.title}**\n   ${r.url}\n   ${r.description || "No description"}`
+    ).join("\n\n");
+    return `Web search results for "${query}":\n\n${formatted}`;
+  } catch (err: any) {
+    console.warn("Web search failed:", err?.message);
+    return `Web search failed: ${err?.message || "Unknown error"}`;
+  }
+}
+
 /** Execute a tool call by name and return the result string */
 async function executeTool(name: string, args: Record<string, any>): Promise<string> {
   if (name === "get_weather") {
@@ -212,6 +267,11 @@ async function executeTool(name: string, args: Record<string, any>): Promise<str
     if (!city) return "Error: city parameter is required";
     const result = await resolveWeatherForCity(city);
     return result || `Could not retrieve weather data for "${city}". The city may not exist or the weather service may be unavailable.`;
+  }
+  if (name === "web_search") {
+    const query = args.query;
+    if (!query) return "Error: query parameter is required";
+    return await executeWebSearch(query);
   }
   return `Unknown tool: ${name}`;
 }
@@ -272,6 +332,7 @@ app.post("/api/chat", async (req, res) => {
 
   // Determine which tools are available based on linked MCP connections
   const hasWeather = mcpConnectionIds && mcpConnectionIds.includes("accuweather");
+  const hasWebSearch = mcpConnectionIds && mcpConnectionIds.includes("duckduckgo-search");
 
   // Set up SSE headers
   res.setHeader("Content-Type", "text/event-stream");
@@ -281,9 +342,9 @@ app.post("/api/chat", async (req, res) => {
 
   try {
     if (isAnthropicModel(model)) {
-      await handleAnthropicChat(model, messages, finalSystemPrompt, hasWeather || false, res);
+      await handleAnthropicChat(model, messages, finalSystemPrompt, hasWeather || false, hasWebSearch || false, res);
     } else {
-      await handleOpenAIChat(model, messages, finalSystemPrompt, hasWeather || false, res);
+      await handleOpenAIChat(model, messages, finalSystemPrompt, hasWeather || false, hasWebSearch || false, res);
     }
 
     res.write("data: [DONE]\n\n");
@@ -301,6 +362,7 @@ async function handleOpenAIChat(
   messages: ChatMessage[],
   systemPrompt: string,
   hasWeather: boolean,
+  hasWebSearch: boolean,
   res: express.Response,
 ) {
   const oaiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
@@ -308,7 +370,10 @@ async function handleOpenAIChat(
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
 
-  const tools = hasWeather ? [WEATHER_TOOL_OPENAI] : undefined;
+  const toolsList: OpenAI.Chat.Completions.ChatCompletionTool[] = [];
+  if (hasWeather) toolsList.push(WEATHER_TOOL_OPENAI);
+  if (hasWebSearch) toolsList.push(WEB_SEARCH_TOOL_OPENAI);
+  const tools = toolsList.length > 0 ? toolsList : undefined;
 
   // First call — may return tool calls or a direct response
   const firstResponse = await openai.chat.completions.create({
@@ -365,13 +430,17 @@ async function handleAnthropicChat(
   messages: ChatMessage[],
   systemPrompt: string,
   hasWeather: boolean,
+  hasWebSearch: boolean,
   res: express.Response,
 ) {
   const userMessages = messages
     .filter((m) => m.role !== "system")
     .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
-  const tools = hasWeather ? [WEATHER_TOOL_ANTHROPIC] : undefined;
+  const toolsList: any[] = [];
+  if (hasWeather) toolsList.push(WEATHER_TOOL_ANTHROPIC);
+  if (hasWebSearch) toolsList.push(WEB_SEARCH_TOOL_ANTHROPIC);
+  const tools = toolsList.length > 0 ? toolsList : undefined;
 
   // First call — may return tool use blocks
   const firstResponse = await anthropic.messages.create({

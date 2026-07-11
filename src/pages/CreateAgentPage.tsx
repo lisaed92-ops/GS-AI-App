@@ -402,11 +402,11 @@ export default function CreateAgentPage() {
           )}
         </div>
 
-        {/* 7. MCP Connections */}
+        {/* 7. MCP Connections & Tools */}
         <div>
-          {sectionTitle("MCP Connections")}
+          {sectionTitle("MCP Connections & Tools")}
           {availableMcp.length === 0 ? (
-            <p className="text-xs text-gray-500">No MCP servers approved yet. Set them up in MCP Connections.</p>
+            <p className="text-xs text-gray-500">No MCP servers approved yet. Set them up in MCP Connections & Tools.</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {availableMcp.map((mc) => {
