@@ -8,6 +8,7 @@ import {
   Inbox,
   ChevronRight,
   X,
+  Settings,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -225,6 +226,9 @@ export default function Sidebar() {
           () => setMcpOpen((o) => !o),
           mcpConns.map((c) => ({ ...c, href: `/connections` })),
         )}
+
+        {sectionLabel("Configuration")}
+        {navItem({ name: "Settings", href: "/settings", icon: Settings })}
       </nav>
       <div className="border-t border-white/5 px-4 py-3 flex items-center gap-2">
         <img src={gsIcon} alt="Global Streaming" className="h-[24px]" />

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Plus, Trash2, ArrowUp, ArrowDown, Sparkles, Plug, Bot, Send, UserCheck } from "lucide-react";
 import { type WorkflowStep, type WorkflowStepType } from "../types/agent";
 import { generateId } from "../lib/storage";
+import { apiKeyHeaders } from "../lib/keys";
 
 const STEP_TYPES: { value: WorkflowStepType; label: string; icon: typeof Bot; color: string }[] = [
   { value: "fetch", label: "Fetch Data", icon: Plug, color: "text-green-400" },
@@ -53,7 +54,7 @@ export default function WorkflowBuilder({ steps, onChange, description }: Props)
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...apiKeyHeaders() },
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: [{ role: "user", content: `Based on this agent description, generate a workflow as a JSON array of steps. Each step should have: type (one of: "fetch", "ai_process", "send_output", "human_review"), label (short name), and instruction (what to do). Return ONLY valid JSON, no markdown.\n\nDescription: "${description}"` }],

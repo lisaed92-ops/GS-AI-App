@@ -12,8 +12,9 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const pdfParse = require("pdf-parse");
 
-// Load .env.local
+// Load .env.local (preferred), then .env as a fallback for hosted deployments
 dotenv.config({ path: ".env.local" });
+dotenv.config();
 
 const app = express();
 app.use(cors());
@@ -85,8 +86,41 @@ app.delete("/api/files/:filename", (req, res) => {
   res.json({ ok: true });
 });
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// ── Bring-your-own-key resolution ──
+// Keys can come from (in priority order):
+//   1. Per-request headers (x-openai-key / x-anthropic-key / x-accuweather-key)
+//      — sent by the browser from the user's Settings → API Keys page
+//   2. Server environment (.env.local) — for hosts that configure keys centrally
+// Keys are never logged or echoed back to the client.
+
+function resolveKey(req: express.Request, header: string, envVar: string): string {
+  const fromHeader = (req.header(header) || "").trim();
+  return fromHeader || (process.env[envVar] || "").trim();
+}
+
+function getOpenAIClient(req: express.Request): OpenAI | null {
+  const apiKey = resolveKey(req, "x-openai-key", "OPENAI_API_KEY");
+  return apiKey ? new OpenAI({ apiKey }) : null;
+}
+
+function getAnthropicClient(req: express.Request): Anthropic | null {
+  const apiKey = resolveKey(req, "x-anthropic-key", "ANTHROPIC_API_KEY");
+  return apiKey ? new Anthropic({ apiKey }) : null;
+}
+
+function getAccuWeatherKey(req: express.Request): string {
+  return resolveKey(req, "x-accuweather-key", "ACCUWEATHER_API_KEY");
+}
+
+// Report which keys the SERVER has configured via env (booleans only — never the values).
+// The frontend combines this with its own localStorage state on the Settings page.
+app.get("/api/keys/status", (_req, res) => {
+  res.json({
+    openai: Boolean((process.env.OPENAI_API_KEY || "").trim()),
+    anthropic: Boolean((process.env.ANTHROPIC_API_KEY || "").trim()),
+    accuweather: Boolean((process.env.ACCUWEATHER_API_KEY || "").trim()),
+  });
+});
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -292,11 +326,12 @@ async function executeWebSearch(query: string): Promise<string> {
 }
 
 /** Execute a tool call by name and return the result string */
-async function executeTool(name: string, args: Record<string, any>): Promise<string> {
+async function executeTool(name: string, args: Record<string, any>, accuweatherKey: string): Promise<string> {
   if (name === "get_weather") {
+    if (!accuweatherKey) return "Error: no AccuWeather API key is configured. Tell the user to add their key in Settings → API Keys (or set ACCUWEATHER_API_KEY on the server).";
     const city = args.city;
     if (!city) return "Error: city parameter is required";
-    const result = await resolveWeatherForCity(city);
+    const result = await resolveWeatherForCity(city, accuweatherKey);
     return result || `Could not retrieve weather data for "${city}". The city may not exist or the weather service may be unavailable.`;
   }
   if (name === "web_search") {
@@ -367,6 +402,21 @@ app.post("/api/chat", async (req, res) => {
   // Determine which tools are available based on linked MCP connections
   const hasWeather = mcpConnectionIds && mcpConnectionIds.includes("accuweather");
   const hasWebSearch = mcpConnectionIds && mcpConnectionIds.includes("duckduckgo-search");
+  const accuweatherKey = getAccuWeatherKey(req);
+
+  // Resolve the API client for the requested model — before opening the SSE
+  // stream so a missing key surfaces as a clear HTTP error.
+  const useAnthropic = isAnthropicModel(model);
+  const anthropic = useAnthropic ? getAnthropicClient(req) : null;
+  const openai = useAnthropic ? null : getOpenAIClient(req);
+  if (useAnthropic ? !anthropic : !openai) {
+    const provider = useAnthropic ? "Anthropic" : "OpenAI";
+    const envVar = useAnthropic ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+    res.status(401).json({
+      error: `No ${provider} API key configured. Add your key in Settings → API Keys, or set ${envVar} in .env.local on the server.`,
+    });
+    return;
+  }
 
   // Set up SSE headers
   res.setHeader("Content-Type", "text/event-stream");
@@ -375,10 +425,10 @@ app.post("/api/chat", async (req, res) => {
   res.flushHeaders();
 
   try {
-    if (isAnthropicModel(model)) {
-      await handleAnthropicChat(model, messages, finalSystemPrompt, hasWeather || false, hasWebSearch || false, res);
+    if (anthropic) {
+      await handleAnthropicChat(anthropic, model, messages, finalSystemPrompt, hasWeather || false, hasWebSearch || false, accuweatherKey, res);
     } else {
-      await handleOpenAIChat(model, messages, finalSystemPrompt, hasWeather || false, hasWebSearch || false, res);
+      await handleOpenAIChat(openai!, model, messages, finalSystemPrompt, hasWeather || false, hasWebSearch || false, accuweatherKey, res);
     }
 
     res.write("data: [DONE]\n\n");
@@ -392,11 +442,13 @@ app.post("/api/chat", async (req, res) => {
 
 // ── OpenAI chat with tool calling ──
 async function handleOpenAIChat(
+  openai: OpenAI,
   model: string,
   messages: ChatMessage[],
   systemPrompt: string,
   hasWeather: boolean,
   hasWebSearch: boolean,
+  accuweatherKey: string,
   res: express.Response,
 ) {
   const oaiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
@@ -426,7 +478,7 @@ async function handleOpenAIChat(
     for (const toolCall of choice.message.tool_calls) {
       const args = JSON.parse(toolCall.function.arguments);
       console.log(`🔧 Tool call: ${toolCall.function.name}(${JSON.stringify(args)})`);
-      const result = await executeTool(toolCall.function.name, args);
+      const result = await executeTool(toolCall.function.name, args, accuweatherKey);
       console.log(`📡 Tool result: ${result.slice(0, 200)}`);
       oaiMessages.push({
         role: "tool",
@@ -460,11 +512,13 @@ async function handleOpenAIChat(
 
 // ── Anthropic chat with tool calling ──
 async function handleAnthropicChat(
+  anthropic: Anthropic,
   model: string,
   messages: ChatMessage[],
   systemPrompt: string,
   hasWeather: boolean,
   hasWebSearch: boolean,
+  accuweatherKey: string,
   res: express.Response,
 ) {
   const userMessages = messages
@@ -500,7 +554,7 @@ async function handleAnthropicChat(
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const toolUse of toolUseBlocks) {
       console.log(`🔧 Tool call: ${toolUse.name}(${JSON.stringify(toolUse.input)})`);
-      const result = await executeTool(toolUse.name, toolUse.input as Record<string, any>);
+      const result = await executeTool(toolUse.name, toolUse.input as Record<string, any>, accuweatherKey);
       console.log(`📡 Tool result: ${result.slice(0, 200)}`);
       toolResults.push({
         type: "tool_result",
@@ -544,8 +598,8 @@ const ACCUWEATHER_BASE = "http://dataservice.accuweather.com";
 
 app.get("/api/weather/search", async (req, res) => {
   const q = req.query.q as string;
-  const apiKey = process.env.ACCUWEATHER_API_KEY;
-  if (!apiKey) { res.status(500).json({ error: "ACCUWEATHER_API_KEY not configured" }); return; }
+  const apiKey = getAccuWeatherKey(req);
+  if (!apiKey) { res.status(401).json({ error: "No AccuWeather API key configured. Add your key in Settings → API Keys, or set ACCUWEATHER_API_KEY in .env.local on the server." }); return; }
   if (!q) { res.status(400).json({ error: "q query parameter is required" }); return; }
   try {
     const r = await fetch(`${ACCUWEATHER_BASE}/locations/v1/cities/search?apikey=${apiKey}&q=${encodeURIComponent(q)}`);
@@ -557,8 +611,8 @@ app.get("/api/weather/search", async (req, res) => {
 });
 
 app.get("/api/weather/current/:locationKey", async (req, res) => {
-  const apiKey = process.env.ACCUWEATHER_API_KEY;
-  if (!apiKey) { res.status(500).json({ error: "ACCUWEATHER_API_KEY not configured" }); return; }
+  const apiKey = getAccuWeatherKey(req);
+  if (!apiKey) { res.status(401).json({ error: "No AccuWeather API key configured. Add your key in Settings → API Keys, or set ACCUWEATHER_API_KEY in .env.local on the server." }); return; }
   try {
     const r = await fetch(`${ACCUWEATHER_BASE}/currentconditions/v1/${req.params.locationKey}?apikey=${apiKey}`);
     const data = await r.json();
@@ -569,10 +623,9 @@ app.get("/api/weather/current/:locationKey", async (req, res) => {
 });
 
 /** Fetch weather data for a city name (called by tool execution) */
-async function resolveWeatherForCity(city: string): Promise<string | null> {
-  const apiKey = process.env.ACCUWEATHER_API_KEY;
+async function resolveWeatherForCity(city: string, apiKey: string): Promise<string | null> {
   if (!apiKey) {
-    console.warn("ACCUWEATHER_API_KEY not configured");
+    console.warn("No AccuWeather API key available for this request");
     return null;
   }
 

@@ -105,12 +105,20 @@ Factori is a proof-of-concept AI agent portal built with React, TypeScript, and 
    npm install
    ```
 
-2. **Create `.env.local`** in the project root:
+2. **Add your API keys** — pick either option (browser keys win if both are set):
+
+   **Option A — in the app (recommended for personal use):** start the app (steps 3–5), open **Settings → API Keys** in the sidebar, and paste your keys. They're stored only in your browser's localStorage and sent to your local API server with each request — never persisted server-side.
+
+   **Option B — server-side `.env.local` (for shared/hosted deployments):** copy the template and fill it in:
+   ```bash
+   cp .env.example .env.local
+   ```
    ```env
    OPENAI_API_KEY=sk-...
    ANTHROPIC_API_KEY=sk-ant-...
    ACCUWEATHER_API_KEY=...        # optional
    ```
+   `.env.local` is gitignored, so keys are never committed. All keys are optional — the app runs without them and tells you which key is missing when you pick a model.
 
 3. **Start the backend:**
    ```bash
@@ -138,6 +146,7 @@ Factori is a proof-of-concept AI agent portal built with React, TypeScript, and 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/chat` | Stream chat completion (SSE) with tool calling |
+| `GET` | `/api/keys/status` | Which API keys are configured server-side (booleans only) |
 | `POST` | `/api/upload` | Upload a file (max 10 MB) |
 | `GET` | `/api/files/:filename` | Serve an uploaded file |
 | `DELETE` | `/api/files/:filename` | Delete an uploaded file |

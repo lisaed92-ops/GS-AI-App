@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Send, Sparkles, Loader2 } from "lucide-react";
+import { apiKeyHeaders } from "../lib/keys";
 
 interface Props {
   skillName: string;
@@ -61,7 +62,7 @@ Rules:
 
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...apiKeyHeaders() },
         body: JSON.stringify({ model: "gpt-4o-mini", systemPrompt, messages: newMessages }),
       });
 

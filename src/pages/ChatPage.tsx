@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Send, Bot, ChevronDown, PlusCircle, Sparkles, Loader2, Plus, Paperclip, X, FileText, Image as ImageIcon } from "lucide-react";
 import { MODEL_OPTIONS, DEFAULT_MODEL, type KnowledgeItem, type AcceptedInput } from "../types/agent";
 import { getAgents, getSkills, getChatHistory, saveChatHistory, generateId } from "../lib/storage";
+import { apiKeyHeaders } from "../lib/keys";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import factoriLogo from "../../Images/Factori_70h.png";
@@ -151,7 +152,7 @@ export default function ChatPage() {
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...apiKeyHeaders() },
         body: JSON.stringify({
           model: selectedModel,
           messages: updatedMessages.map((m) => ({
@@ -186,7 +187,8 @@ export default function ChatPage() {
       });
 
       if (!res.ok) {
-        throw new Error(`Server error: ${res.status}`);
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.error || `Server error: ${res.status}`);
       }
 
       const reader = res.body?.getReader();

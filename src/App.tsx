@@ -7,6 +7,7 @@ import SkillLibraryPage from "./pages/SkillLibraryPage";
 import CreateSkillPage from "./pages/CreateSkillPage";
 import McpConnectionsPage from "./pages/McpConnectionsPage";
 import ApprovalsPage from "./pages/ApprovalsPage";
+import SettingsPage from "./pages/SettingsPage";
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/create-skill/:id" element={<CreateSkillPage />} />
         <Route path="/connections" element={<McpConnectionsPage />} />
         <Route path="/approvals" element={<ApprovalsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Route>
     </Routes>
   );
