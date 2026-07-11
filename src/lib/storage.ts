@@ -150,6 +150,77 @@ const MCP_SEEDS: McpConnection[] = [
   localStorage.setItem(MCP_KEY, JSON.stringify(conns));
 })();
 
+// ── Seed default agents on app load ──
+const AGENT_SEEDS: Agent[] = [
+  {
+    id: "seed-tldr",
+    name: "TL;DR",
+    description: "Summarises key concepts, documents, and web search results into concise TL;DR summaries.",
+    systemPrompt: `You are an AI agent designed to summarize key concepts and documents. Your task is to take user prompts, identify the relevant information, and create concise TL;DR summaries. Here are your guidelines:
+
+1. **User Prompt Processing:** When a user submits a prompt, evaluate its content. If necessary, conduct a web search to gather additional information related to the subject.
+
+2. **Document Handling:** If the user provides any attachments, analyze the content of these documents to extract essential points.
+
+3. **Summary Creation:** Generate a TL;DR that is clear and concise, with a maximum length of 500 words unless the user specifies a different limit. Aim to summarize the most important information effectively.
+
+4. **Source Referencing:** When you summarize information obtained from web searches, include concise references to the sources used. Ensure that the references are clear and appropriately formatted.
+
+Keep in mind the goal is to help the user quickly understand the key concepts without overwhelming them with excessive detail. Always strive for clarity and brevity.`,
+    model: "gpt-4o-mini",
+    visibility: "published",
+    slackHandle: "tldr",
+    trigger: { type: "manual" },
+    mcpConnectionIds: ["duckduckgo-search"],
+    skillIds: [],
+    acceptedInputs: ["text", "documents", "pdfs"],
+    isWorkflowAgent: false,
+    workflowSteps: [],
+    knowledge: [],
+    favourite: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+(function initAgents() {
+  let agents: Agent[] = [];
+  try { agents = JSON.parse(localStorage.getItem(AGENTS_KEY) || "[]"); } catch { agents = []; }
+  for (const seed of AGENT_SEEDS) {
+    if (!agents.find((a) => a.id === seed.id)) agents.push(seed);
+  }
+  localStorage.setItem(AGENTS_KEY, JSON.stringify(agents));
+})();
+
+// ── Seed default skills on app load ──
+const SKILL_SEEDS: Skill[] = [
+  {
+    id: "seed-weekly-ai-news",
+    name: "Weekly AI News",
+    description: "Searches the web for the latest AI news and produces a structured weekly bulletin with TL;DRs and source links.",
+    instructions: `1. Start by noting today's date to ensure the news is from the previous week.
+2. Conduct a web search for news articles related to artificial intelligence from the last week.
+3. Focus your search on major technology news outlets and reputable blog posts from key AI organizations, including OpenAI, Anthropic, Meta, DeepMind, and Mistral.
+4. Gather articles covering all types of news related to AI, including technical advancements, financial developments, and industry trends.
+5. For each relevant article you find:
+   - Write a TL;DR explaining the key headlines, like a bulletin.
+   - Include a brief summary that captures the main points.
+   - Include a clickable link to the full article for users to follow up and read more.
+6. Compile all the summaries and links into a clear and organized format, ready to be shared with the user.`,
+    mcpConnectionIds: ["duckduckgo-search"],
+    scope: "team",
+    favourite: false,
+    createdAt: new Date().toISOString(),
+  },
+];
+(function initSkills() {
+  let skills: Skill[] = [];
+  try { skills = JSON.parse(localStorage.getItem(SKILLS_KEY) || "[]"); } catch { skills = []; }
+  for (const seed of SKILL_SEEDS) {
+    if (!skills.find((s) => s.id === seed.id)) skills.push(seed);
+  }
+  localStorage.setItem(SKILLS_KEY, JSON.stringify(skills));
+})();
+
 export function getMcpConnections(): McpConnection[] {
   return getItem<McpConnection>(MCP_KEY, []);
 }

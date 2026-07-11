@@ -60,6 +60,19 @@ export default function WorkflowBuilder({ steps, onChange, description }: Props)
           messages: [{ role: "user", content: `Based on this agent description, generate a workflow as a JSON array of steps. Each step should have: type (one of: "fetch", "ai_process", "send_output", "human_review"), label (short name), and instruction (what to do). Return ONLY valid JSON, no markdown.\n\nDescription: "${description}"` }],
         }),
       });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        const msg = errBody?.error || `Server error: ${res.status}`;
+        if (res.status === 401) {
+          alert("No API key found. Please go to Settings to add your API key.");
+        } else {
+          alert(msg);
+        }
+        setGenerating(false);
+        return;
+      }
+
       let text = "";
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();

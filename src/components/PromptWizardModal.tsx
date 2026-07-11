@@ -60,6 +60,18 @@ Rules:
         }),
       });
 
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        const msg = errBody?.error || `Server error: ${res.status}`;
+        if (res.status === 401) {
+          alert("No API key found. Please go to Settings to add your API key.");
+        } else {
+          alert(msg);
+        }
+        setIsLoading(false);
+        return;
+      }
+
       let text = "";
       const assistantMsg: Message = { role: "assistant", content: "" };
       setMessages([...newMessages, assistantMsg]);
